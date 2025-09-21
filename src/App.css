@@ -1,38 +1,29 @@
-.App {
-  text-align: center;
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;     /* still hide page‑level scroll */
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: visible;    /* allow child panes to scroll */
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+/* Ensure flex children can shrink and contain their own layout */
+.ps-content-wrapper-v0,
+.EditorLayout__questionPane,  /* if you name it via CSS Modules or BEM */
+.EditorLayout__editorPane {
+  min-width: 0;           /* lets the pane shrink without overflow errors */
+  contain: layout size;   /* isolate layout changes to this element */
+  overflow-anchor: none;  /* stop unexpected scroll jumps */
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
-}
-
-.App-link {
-  color: #61dafb;
-}
-
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+/* Now your question pane will scroll vertically as needed */
+.ps-content-wrapper-v0 {
+  overflow-y: auto !important;
 }
