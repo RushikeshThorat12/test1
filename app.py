@@ -1,16 +1,18 @@
 import os
-from ultralytics import YOLO
 from pathlib import Path
 import cv2
 import argparse
+import requests
+import json
 
-# Load the fine-tuned model
-MODEL_PATH = "best (1).pt"
-model = YOLO(MODEL_PATH)
+# Ultralytics API Configuration
+API_URL = "https://predict-69ac5cb111f53bc521c6-dproatj77a-el.a.run.app/predict"
+API_HEADERS = {"Authorization": "Bearer ul_2cc7a00c6d28447e27fadb24be459a2f9847bf90"}
+INFERENCE_PARAMS = {"conf": 0.5, "iou": 0.7, "imgsz": 640}
 
 def detect_objects_in_image(image_path, conf=0.5, save_results=True):
     """
-    Run object detection on a single image
+    Run object detection on a single image using Ultralytics API
     
     Args:
         image_path: Path to the image file
@@ -18,46 +20,69 @@ def detect_objects_in_image(image_path, conf=0.5, save_results=True):
         save_results: Whether to save annotated image
     
     Returns:
-        Results object from YOLO
+        Detections from API
     """
     print(f"\n🔍 Running inference on: {image_path}")
     
-    # Run inference
-    results = model.predict(
-        source=image_path,
-        conf=conf,
-        device=0,  # Use GPU if available, otherwise CPU
-        verbose=True
-    )
-    
-    # Process results
-    for i, result in enumerate(results):
-        # Get detections
-        boxes = result.boxes
-        print(f"\n✅ Detections found: {len(boxes)}")
+    try:
+        # Send image to API
+        with open(image_path, 'rb') as f:
+            files = {'file': f}
+            params = {"conf": conf, "iou": 0.7, "imgsz": 640}
+            response = requests.post(API_URL, headers=API_HEADERS, data=params, files=files, timeout=30)
+            response.raise_for_status()
         
-        # Print details
-        for box in boxes:
-            cls_id = int(box.cls)
-            conf_score = float(box.conf)
-            class_name = result.names[cls_id]
-            xyxy = box.xyxy[0].tolist()
+        # Parse response
+        detection_data = response.json()
+        
+        if detection_data and 'images' in detection_data and len(detection_data['images']) > 0:
+            image_data = detection_data['images'][0]
+            results = image_data.get('results', [])
+            print(f"\n✅ Detections found: {len(results)}")
             
-            print(f"  • {class_name}: {conf_score:.2f} confidence | Coords: {xyxy}")
-        
-        # Save annotated image
-        if save_results:
-            output_path = f"results_{Path(image_path).stem}.jpg"
-            annotated_frame = result.plot()
-            cv2.imwrite(output_path, annotated_frame)
-            print(f"✨ Saved annotated image: {output_path}")
+            # Print details
+            for detection in results:
+                class_name = detection.get('name', 'Unknown')
+                conf_score = detection.get('confidence', 0.0)
+                box = detection.get('box', {})
+                x1, y1, x2, y2 = box.get('x1', 0), box.get('y1', 0), box.get('x2', 0), box.get('y2', 0)
+                
+                print(f"  • {class_name}: {conf_score:.2f} confidence | Coords: [{x1}, {y1}, {x2}, {y2}]")
+            
+            # Draw annotations if save_results is True
+            if save_results:
+                img = cv2.imread(image_path)
+                if img is not None:
+                    for detection in results:
+                        box = detection.get('box', {})
+                        x1, y1, x2, y2 = int(box.get('x1', 0)), int(box.get('y1', 0)), \
+                                        int(box.get('x2', 0)), int(box.get('y2', 0))
+                        conf = detection.get('confidence', 0.0)
+                        cls_name = detection.get('name', 'Unknown')
+                        
+                        # Draw rectangle
+                        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                        # Draw label
+                        label = f"{cls_name} {conf:.2f}"
+                        cv2.putText(img, label, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                    
+                    output_path = f"results_{Path(image_path).stem}.jpg"
+                    cv2.imwrite(output_path, img)
+                    print(f"✨ Saved annotated image: {output_path}")
+            
+            return results
+        else:
+            print("❌ No detections found")
+            return []
     
-    return results
+    except requests.exceptions.RequestException as e:
+        print(f"❌ API Error: {e}")
+        return []
 
 
 def detect_objects_in_folder(folder_path, conf=0.5):
     """
-    Run object detection on all images in a folder
+    Run object detection on all images in a folder using Ultralytics API
     
     Args:
         folder_path: Path to folder containing images

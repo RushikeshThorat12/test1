@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Object Detection - Webcam</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 1200px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+            margin-bottom: 20px;
+        }
+
+        .nav-links {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .nav-links a {
+            color: #667eea;
+            text-decoration: none;
+            margin: 0 15px;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: #764ba2;
+        }
+
+        .nav-links a.active {
+            text-decoration: underline;
+            color: #764ba2;
+        }
+
+        .device-status {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #f0f0f0;
+            border-radius: 20px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .device-status.gpu {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .device-status.cpu {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .video-section {
+            margin-bottom: 30px;
+        }
+
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            max-width: 800px;
+            margin: 0 auto;
+            aspect-ratio: 4 / 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #videoStream {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .video-placeholder {
+            color: #999;
+            font-size: 1.2em;
+            text-align: center;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        label {
+            color: #333;
+            font-weight: 600;
+            min-width: 100px;
+        }
+
+        input[type="range"] {
+            width: 150px;
+            cursor: pointer;
+        }
+
+        .conf-value {
+            color: #667eea;
+            font-weight: bold;
+            min-width: 40px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        button.stop {
+            background: #dc3545;
+        }
+
+        button.stop:hover {
+            background: #c82333;
+        }
+
+        button.capture {
+            background: #28a745;
+        }
+
+        button.capture:hover {
+            background: #218838;
+        }
+
+        .info-section {
+            background: #f9f9f9;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #666;
+        }
+
+        .info-value {
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #f5c6cb;
+            display: none;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #c3e6cb;
+            display: none;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .capture-result {
+            display: none;
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 2px solid #eee;
+        }
+
+        .capture-result.show {
+            display: block;
+        }
+
+        .capture-image {
+            max-width: 600px;
+            margin: 0 auto;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .capture-image img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .capture-detections {
+            background: #f9f9f9;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .detection-item {
+            background: white;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .detection-class {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .detection-conf {
+            background: #667eea;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📹 Real-time Object Detection</h1>
+            <p class="subtitle">Live Webcam Detection</p>
+            <div class="nav-links">
+                <a href="/">📤 Upload Image</a>
+                <a href="/realtime" class="active">📹 Live Camera</a>
+            </div>
+            <div class="device-status" id="deviceStatus"></div>
+        </header>
+
+        <div class="error" id="errorMsg"></div>
+        <div class="success" id="successMsg"></div>
+
+        <div class="video-section">
+            <div class="controls">
+                <div class="control-group">
+                    <label for="confSlider">Confidence:</label>
+                    <input type="range" id="confSlider" min="0" max="1" step="0.1" value="0.5">
+                    <span class="conf-value" id="confValue">0.5</span>
+                </div>
+                <button id="startBtn" class="capture">Start Camera</button>
+                <button id="stopBtn" class="stop" disabled>Stop Camera</button>
+                <button id="captureBtn" class="capture" disabled>📸 Capture Frame</button>
+            </div>
+
+            <div class="video-container">
+                <img id="videoStream" style="display: none;" />
+                <div class="video-placeholder" id="videoPlaceholder">
+                    Click "Start Camera" to begin
+                </div>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Status:</span>
+                    <span class="info-value" id="statusInfo">Idle</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">FPS:</span>
+                    <span class="info-value" id="fpsInfo">--</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="capture-result" id="captureResult">
+            <h2 style="color: #333; margin-bottom: 20px;">📸 Captured Frame</h2>
+            <div class="capture-image">
+                <img id="captureImage" alt="Captured Frame">
+            </div>
+            <div class="capture-detections">
+                <h3 style="color: #333; margin-bottom: 15px;">🔍 Detections</h3>
+                <div id="captureDetectionsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const captureBtn = document.getElementById('captureBtn');
+        const videoStream = document.getElementById('videoStream');
+        const videoPlaceholder = document.getElementById('videoPlaceholder');
+        const confSlider = document.getElementById('confSlider');
+        const confValue = document.getElementById('confValue');
+        const errorMsg = document.getElementById('errorMsg');
+        const successMsg = document.getElementById('successMsg');
+        const deviceStatus = document.getElementById('deviceStatus');
+        const statusInfo = document.getElementById('statusInfo');
+        const captureResult = document.getElementById('captureResult');
+
+        let isStreaming = false;
+        let streamInterval = null;
+
+        // Update confidence value
+        confSlider.addEventListener('input', (e) => {
+            confValue.textContent = e.target.value;
+        });
+
+        // Show error
+        function showError(message) {
+            errorMsg.textContent = message;
+            errorMsg.style.display = 'block';
+            successMsg.style.display = 'none';
+        }
+
+        // Show success
+        function showSuccess(message) {
+            successMsg.textContent = message;
+            successMsg.style.display = 'block';
+            errorMsg.style.display = 'none';
+        }
+
+        // Start camera streaming
+        startBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/camera/start', {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    showError(data.error || 'Could not start camera');
+                    return;
+                }
+
+                isStreaming = true;
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                captureBtn.disabled = false;
+                statusInfo.textContent = 'Streaming...';
+                videoPlaceholder.style.display = 'none';
+                videoStream.style.display = 'block';
+
+                // Refresh video every 100ms
+                streamInterval = setInterval(() => {
+                    videoStream.src = `/api/video_feed?conf=${confSlider.value}&t=${Date.now()}`;
+                }, 100);
+
+                showSuccess('Camera started successfully');
+            } catch (error) {
+                showError('Error: ' + error.message);
+            }
+        });
+
+        // Stop camera streaming
+        stopBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/camera/stop', {
+                    method: 'POST'
+                });
+
+                isStreaming = false;
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                captureBtn.disabled = true;
+                statusInfo.textContent = 'Idle';
+                videoPlaceholder.style.display = 'block';
+                videoStream.style.display = 'none';
+
+                if (streamInterval) {
+                    clearInterval(streamInterval);
+                    streamInterval = null;
+                }
+
+                showSuccess('Camera stopped');
+            } catch (error) {
+                showError('Error: ' + error.message);
+            }
+        });
+
+        // Capture frame
+        captureBtn.addEventListener('click', async () => {
+            try {
+                captureBtn.disabled = true;
+                captureBtn.innerHTML = '<span class="loading-spinner"></span>Capturing...';
+
+                const response = await fetch('/api/camera/capture', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        conf: parseFloat(confSlider.value)
+                    })
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    showError(data.error || 'Capture failed');
+                    captureBtn.disabled = false;
+                    captureBtn.textContent = '📸 Capture Frame';
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('captureImage').src = data.image;
+
+                    const detectionsList = document.getElementById('captureDetectionsList');
+                    detectionsList.innerHTML = '';
+
+                    if (data.count > 0) {
+                        data.detections.forEach(det => {
+                            const item = document.createElement('div');
+                            item.className = 'detection-item';
+                            item.innerHTML = `
+                                <span class="detection-class">${det.class}</span>
+                                <span class="detection-conf">${(det.confidence * 100).toFixed(0)}%</span>
+                            `;
+                            detectionsList.appendChild(item);
+                        });
+                    } else {
+                        detectionsList.innerHTML = '<p style="color: #999;">No detections found</p>';
+                    }
+
+                    captureResult.classList.add('show');
+                    showSuccess(`Captured! Found ${data.count} object(s)`);
+                } else {
+                    showError(data.error || 'Capture failed');
+                }
+
+                captureBtn.disabled = false;
+                captureBtn.textContent = '📸 Capture Frame';
+            } catch (error) {
+                showError('Error: ' + error.message);
+                captureBtn.disabled = false;
+                captureBtn.textContent = '📸 Capture Frame';
+            }
+        });
+
+        // Check device status on load
+        window.addEventListener('load', () => {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    const statusDiv = document.getElementById('deviceStatus');
+                    statusDiv.textContent = `${data.device}: ${data.name}`;
+                    statusDiv.classList.add(data.device.toLowerCase());
+                });
+        });
+    </script>
+</body>
+</html>
