@@ -344,6 +344,13 @@
                     <input type="range" id="confSlider" min="0" max="1" step="0.1" value="0.5">
                     <span class="conf-value" id="confValue">0.5</span>
                 </div>
+                <div class="control-group">
+                    <label for="modelSelect">Model:</label>
+                    <select id="modelSelect" style="padding: 8px; border-radius: 5px; border: 1px solid #ccc; cursor: pointer;">
+                        <option value="ultralytics">Ultralytics (Cloud)</option>
+                        <option value="openvino">OpenVINO (Local)</option>
+                    </select>
+                </div>
                 <button id="startBtn" class="capture">Start Camera</button>
                 <button id="stopBtn" class="stop" disabled>Stop Camera</button>
                 <button id="captureBtn" class="capture" disabled>📸 Capture Frame</button>
@@ -390,6 +397,7 @@
         const videoPlaceholder = document.getElementById('videoPlaceholder');
         const confSlider = document.getElementById('confSlider');
         const confValue = document.getElementById('confValue');
+        const modelSelect = document.getElementById('modelSelect');
         const errorMsg = document.getElementById('errorMsg');
         const successMsg = document.getElementById('successMsg');
         const deviceStatus = document.getElementById('deviceStatus');
@@ -439,9 +447,9 @@
                 videoPlaceholder.style.display = 'none';
                 videoStream.style.display = 'block';
 
-                // Refresh video every 100ms
+                // Refresh video every 100ms with selected model
                 streamInterval = setInterval(() => {
-                    videoStream.src = `/api/video_feed?conf=${confSlider.value}&t=${Date.now()}`;
+                    videoStream.src = `/api/video_feed?conf=${confSlider.value}&model=${modelSelect.value}&t=${Date.now()}`;
                 }, 100);
 
                 showSuccess('Camera started successfully');
@@ -488,7 +496,8 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        conf: parseFloat(confSlider.value)
+                        conf: parseFloat(confSlider.value),
+                        model: modelSelect.value
                     })
                 });
 
@@ -543,8 +552,17 @@
                 .then(response => response.json())
                 .then(data => {
                     const statusDiv = document.getElementById('deviceStatus');
-                    statusDiv.textContent = `${data.device}: ${data.name}`;
-                    statusDiv.classList.add(data.device.toLowerCase());
+                    const models = data.available_models || ['ultralytics'];
+                    
+                    // Update model selector based on availability
+                    const openvinoOption = modelSelect.querySelector('option[value="openvino"]');
+                    if (!data.openvino_available && openvinoOption) {
+                        openvinoOption.disabled = true;
+                        openvinoOption.textContent = 'OpenVINO (Not Available)';
+                    }
+                    
+                    statusDiv.textContent = `Ready | Models: ${models.join(', ')}`;
+                    statusDiv.style.display = 'inline-block';
                 });
         });
     </script>

@@ -28,7 +28,8 @@ def detect_objects_in_image(image_path, conf=0.5, save_results=True):
         # Send image to API
         with open(image_path, 'rb') as f:
             files = {'file': f}
-            params = {"conf": conf, "iou": 0.7, "imgsz": 640}
+            params = {"conf": str(round(conf, 2)), "iou": "0.7", "imgsz": "640"}
+            print(f"Sending with conf={params['conf']}...")
             response = requests.post(API_URL, headers=API_HEADERS, data=params, files=files, timeout=30)
             response.raise_for_status()
         

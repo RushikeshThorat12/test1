@@ -46,10 +46,12 @@ while True:
     try:
         # Encode frame as JPEG
         _, buffer = cv2.imencode('.jpg', frame)
+        frame_bytes = buffer.tobytes()
         
         # Send to API
-        files = {'file': ('frame.jpg', buffer.tobytes(), 'image/jpeg')}
-        response = requests.post(API_URL, headers=API_HEADERS, data=INFERENCE_PARAMS, files=files, timeout=10)
+        files = {'file': ('frame.jpg', frame_bytes, 'image/jpeg')}
+        params = {"conf": str(round(INFERENCE_PARAMS['conf'], 2)), "iou": "0.7", "imgsz": "640"}
+        response = requests.post(API_URL, headers=API_HEADERS, data=params, files=files, timeout=10)
         response.raise_for_status()
         
         # Parse response
