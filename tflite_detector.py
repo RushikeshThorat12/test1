@@ -115,7 +115,7 @@ class TFLiteDetector:
         Postprocess model output to get detections
         
         Args:
-            output: Model output
+            output: Model output shape: (num_outputs, num_predictions) or (batch, num_outputs, num_predictions)
             original_size: Original image size (h, w)
             padding_info: (scale, dx, dy) from preprocessing
             conf_threshold: Confidence threshold
@@ -137,30 +137,56 @@ class TFLiteDetector:
         original_h, original_w = original_size
         scale, dx, dy = padding_info
         
-        # Try parsing as standard YOLO format
-        # Output should be [x_center, y_center, width, height, objectness, class_probs...]
+        # YOLO v8 format: output shape is (num_outputs, num_predictions)
         try:
+            # Transpose if needed to get (num_predictions, num_params)
+            if output.shape[0] < output.shape[1]:
+                # Shape is (outputs, predictions), transpose to (predictions, outputs)
+                output = output.T
+                print(f"[TFLite-Debug] Transposed to: {output.shape}")
+            
+            # Now iterate through predictions
             for pred in output:
+                # pred shape should be (10,) 
+                # Format: [x, y, w, h, obj, class1, class2, ..., classN]
+                if len(pred) < 5:
+                    continue
+                
+                # Get objectness/confidence score
                 objectness = pred[4]
                 
                 if objectness < conf_threshold:
                     continue
                 
-                # Get class prediction
-                class_probs = pred[5:]  # First 80 values are class probabilities
-                class_id = np.argmax(class_probs)
-                class_conf = class_probs[class_id]
+                # Get class scores
+                class_scores = pred[5:]
                 
-                # Final confidence is objectness * class_confidence
-                final_conf = objectness * class_conf
-                
-                if final_conf < conf_threshold:
+                if len(class_scores) == 0:
                     continue
                 
-                # Get bounding box
-                x_center, y_center, w, h = pred[:4]
+                class_id = np.argmax(class_scores)
+                final_conf = objectness
                 
-                # Denormalize and remove padding
+                # Get bounding box - these are in 640x640 model input space
+                # Try interpreting as normalized [0, 1] first
+                x_norm, y_norm, w_norm, h_norm = pred[0], pred[1], pred[2], pred[3]
+                
+                # Check if values look normalized or absolute
+                if x_norm < 1.0 and y_norm < 1.0 and w_norm < 1.0 and h_norm < 1.0 and x_norm > -1 and y_norm > -1:
+                    # Looks normalized - scale to model input size (640x640)
+                    x_center = x_norm * self.img_width
+                    y_center = y_norm * self.img_height
+                    w = w_norm * self.img_width
+                    h = h_norm * self.img_height
+                else:
+                    # Already in pixel space
+                    x_center = x_norm
+                    y_center = y_norm
+                    w = w_norm
+                    h = h_norm
+                
+                # Now map from 640x640 model space to original image space
+                # Reverse the letterbox transformation
                 x_center = (x_center - dx) / scale
                 y_center = (y_center - dy) / scale
                 w = w / scale
@@ -170,6 +196,10 @@ class TFLiteDetector:
                 y1 = max(0, int(y_center - h / 2))
                 x2 = min(original_w, int(x_center + w / 2))
                 y2 = min(original_h, int(y_center + h / 2))
+                
+                # Ensure valid box
+                if x2 <= x1 or y2 <= y1:
+                    continue
                 
                 class_name = self.class_names[class_id] if class_id < len(self.class_names) else f"Class{class_id}"
                 
