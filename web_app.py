@@ -18,6 +18,13 @@ except (ImportError, RuntimeError) as e:
     openvino_detector = None
     openvino_available = False
 
+try:
+    from tflite_detector import TFLiteDetector, TFLITE_AVAILABLE
+except (ImportError, RuntimeError) as e:
+    print(f"Note: TFLite not available - {e}")
+    TFLiteDetector = None
+    TFLITE_AVAILABLE = False
+
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -37,6 +44,16 @@ if openvino_available:
     except Exception as e:
         print(f"Warning: Failed to load OpenVINO model: {e}")
         openvino_available = False
+
+# Initialize TFLite detector only if available
+tflite_detector = None
+if TFLITE_AVAILABLE:
+    try:
+        tflite_detector = TFLiteDetector('best-1.tflite')
+        print("[Flask] TFLite detector initialized successfully")
+    except Exception as e:
+        print(f"Warning: Failed to load TFLite model: {e}")
+        TFLITE_AVAILABLE = False
 
 # Real-time detection globals
 camera = None
@@ -74,14 +91,40 @@ def detect():
         
         # Get parameters
         conf = float(request.form.get('conf', 0.5))
-        model = request.form.get('model', 'ultralytics')  # 'ultralytics' or 'openvino'
+        model = request.form.get('model', 'ultralytics')  # 'ultralytics', 'openvino', or 'tflite'
         
         print(f"[DEBUG] Detecting with model={model}, conf={conf}")
         
         detections = []
         img_base64 = None
         
-        if model == 'openvino' and openvino_available:
+        if model == 'tflite' and TFLITE_AVAILABLE and tflite_detector:
+            # Use TFLite model
+            try:
+                img = cv2.imread(upload_path)
+                if img is None:
+                    return jsonify({'error': 'Failed to read image'}), 400
+                
+                detections = tflite_detector.detect(img, conf=conf)
+                
+                # Draw annotations
+                annotated_img = tflite_detector.draw_detections(img, detections)
+                
+                # Save annotated image
+                result_filename = f"results_{Path(filename).stem}.jpg"
+                result_path = os.path.join(app.config['UPLOAD_FOLDER'], result_filename)
+                cv2.imwrite(result_path, annotated_img)
+                
+                # Convert to base64
+                _, buffer = cv2.imencode('.jpg', annotated_img)
+                img_base64 = base64.b64encode(buffer).decode('utf-8')
+                
+                print(f"[DEBUG] TFLite: Found {len(detections)} detections")
+                
+            except Exception as e:
+                return jsonify({'error': f'TFLite Error: {str(e)}'}), 500
+        
+        elif model == 'openvino' and openvino_available:
             # Use OpenVINO model
             try:
                 img = cv2.imread(upload_path)
@@ -190,11 +233,14 @@ def status():
     available_models = ['ultralytics']
     if openvino_available:
         available_models.append('openvino')
+    if TFLITE_AVAILABLE:
+        available_models.append('tflite')
     
     return jsonify({
         'status': 'ready',
         'available_models': available_models,
         'openvino_available': openvino_available,
+        'tflite_available': TFLITE_AVAILABLE,
         'default_model': 'ultralytics'
     })
 
@@ -223,7 +269,24 @@ def generate_frames(conf=0.5, model='ultralytics'):
             detection_count = 0
             
             try:
-                if model == 'openvino' and openvino_available:
+                if model == 'tflite' and TFLITE_AVAILABLE and tflite_detector:
+                    # Use TFLite model
+                    detections = tflite_detector.detect(frame, conf=conf)
+                    detection_count = len(detections)
+                    
+                    # Draw detections
+                    for det in detections:
+                        bbox = det['bbox']
+                        x1, y1, x2, y2 = int(bbox['x1']), int(bbox['y1']), int(bbox['x2']), int(bbox['y2'])
+                        conf_score = det['confidence']
+                        cls_name = det['class']
+                        
+                        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                        label = f"{cls_name} {conf_score:.2f}"
+                        cv2.putText(annotated_frame, label, (x1, max(y1 - 10, 0)), 
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                
+                elif model == 'openvino' and openvino_available:
                     # Use OpenVINO model
                     detections = openvino_detector.detect(frame, conf=conf)
                     detection_count = len(detections)
