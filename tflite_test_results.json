@@ -1,0 +1,20 @@
+[
+  {
+    "image": "uploads\\a1212.jpg",
+    "detections_count": 0,
+    "inference_time": "0.48s",
+    "detections": []
+  },
+  {
+    "image": "uploads\\A132.jpg",
+    "detections_count": 0,
+    "inference_time": "0.42s",
+    "detections": []
+  },
+  {
+    "image": "uploads\\newpan.jpg",
+    "detections_count": 0,
+    "inference_time": "0.44s",
+    "detections": []
+  }
+]
